@@ -1,0 +1,53 @@
+# ──────────────────────────────────────────────────────────────────────────
+# .gitattributes
+# Force LF line endings for all text files in the repository.
+# This prevents the "LF will be replaced by CRLF" warnings on Windows
+# and ensures consistent line endings across all platforms/contributors.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Default: normalize all text files to LF on commit
+* text=auto eol=lf
+
+# Source code — always LF
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+
+# Config / markup
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.md        text eol=lf
+*.mdx       text eol=lf
+*.svg       text eol=lf
+
+# Scripts
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.ps1       text eol=crlf
+
+# Git / Editor config
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.editorconfig   text eol=lf
+
+# Binary files — do not touch line endings
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.otf   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
