@@ -2,74 +2,121 @@ import type { BoardState } from '../types/game';
 import { checkWinner, getEmptyCells, applyMove } from './gameLogic';
 
 // AI is always 'O', Player is always 'X'
-const AI: 'O' = 'O';
-const PLAYER: 'X' = 'X';
+const AI = 'O';
+const PLAYER = 'X';
+
+interface MinimaxResult {
+  score: number;
+  trapScore: number;
+}
+
+// Cache for memoization (transposition table)
+const memo = new Map<string, MinimaxResult>();
 
 /**
- * Minimax algorithm with Alpha-Beta Pruning.
+ * Returns a unique string key for the current board state and turn.
+ */
+function getBoardKey(board: BoardState, isMaximizing: boolean): string {
+  let key = '';
+  for (let i = 0; i < 9; i++) {
+    key += board[i] || '-';
+  }
+  return key + (isMaximizing ? '1' : '0');
+}
+
+/**
+ * Minimax algorithm with Memoization and Trap-Setting (Complexity Heuristics).
  *
  * Scores are depth-adjusted so the AI:
  *  - Wins as quickly as possible  (+10 - depth)
  *  - Loses as slowly as possible  (depth - 10)
  *  - Draws at 0
  *
+ * Trap Score (trapScore) counts the total sum of terminal states in a branch.
+ * A higher trap score means more branches lead to AI wins, acting as a "trap"
+ * if the opponent plays randomly or makes a mistake.
+ *
  * @param board   Current board state
  * @param depth   Current recursion depth
  * @param isMaximizing  true when it's AI's turn
- * @param alpha   Best score maximizer can guarantee so far
- * @param beta    Best score minimizer can guarantee so far
- * @returns       Heuristic score of the board position
+ * @returns       MinimaxResult containing the best score and the trap score
+ */
+export function minimaxFull(
+  board: BoardState,
+  depth: number,
+  isMaximizing: boolean
+): MinimaxResult {
+  const key = getBoardKey(board, isMaximizing);
+  if (memo.has(key)) {
+    return memo.get(key)!;
+  }
+
+  const { winner } = checkWinner(board);
+  const absoluteDepth = 9 - getEmptyCells(board).length;
+
+  // Terminal states
+  if (winner === AI) {
+    const res = { score: 10 - absoluteDepth, trapScore: 10 - absoluteDepth };
+    memo.set(key, res);
+    return res;
+  }
+  if (winner === PLAYER) {
+    const res = { score: absoluteDepth - 10, trapScore: absoluteDepth - 10 };
+    memo.set(key, res);
+    return res;
+  }
+
+  const empty = getEmptyCells(board);
+  if (empty.length === 0) {
+    const res = { score: 0, trapScore: 0 };
+    memo.set(key, res);
+    return res;
+  }
+
+  if (isMaximizing) {
+    let bestScore = -Infinity;
+    let totalTrapScore = 0;
+    for (const idx of empty) {
+      const next = applyMove(board, idx, AI);
+      const result = minimaxFull(next, depth + 1, false);
+      bestScore = Math.max(bestScore, result.score);
+      totalTrapScore += result.trapScore;
+    }
+    const res = { score: bestScore, trapScore: totalTrapScore };
+    memo.set(key, res);
+    return res;
+  } else {
+    let bestScore = Infinity;
+    let totalTrapScore = 0;
+    for (const idx of empty) {
+      const next = applyMove(board, idx, PLAYER);
+      const result = minimaxFull(next, depth + 1, true);
+      bestScore = Math.min(bestScore, result.score);
+      totalTrapScore += result.trapScore;
+    }
+    const res = { score: bestScore, trapScore: totalTrapScore };
+    memo.set(key, res);
+    return res;
+  }
+}
+
+/**
+ * Backwards compatible signature for tests that expect a number.
  */
 export function minimax(
   board: BoardState,
   depth: number,
   isMaximizing: boolean,
-  alpha: number,
-  beta: number,
+  _alpha: number = -Infinity,
+  _beta: number = Infinity
 ): number {
-  const { winner } = checkWinner(board);
-
-  // Terminal states
-  if (winner === AI) return 10 - depth;
-  if (winner === PLAYER) return depth - 10;
-
-  const empty = getEmptyCells(board);
-  if (empty.length === 0) return 0; // draw
-
-  if (isMaximizing) {
-    let best = -Infinity;
-    for (const idx of empty) {
-      const next = applyMove(board, idx, AI);
-      const score = minimax(next, depth + 1, false, alpha, beta);
-      best = Math.max(best, score);
-      alpha = Math.max(alpha, score);
-      if (beta <= alpha) break; // Beta cut-off
-    }
-    return best;
-  } else {
-    let best = Infinity;
-    for (const idx of empty) {
-      const next = applyMove(board, idx, PLAYER);
-      const score = minimax(next, depth + 1, true, alpha, beta);
-      best = Math.min(best, score);
-      beta = Math.min(beta, score);
-      if (beta <= alpha) break; // Alpha cut-off
-    }
-    return best;
-  }
+  return minimaxFull(board, depth, isMaximizing).score;
 }
 
 /**
- * Positional preference weights.
- * Center > Corners > Edges — used as tie-breaker when Minimax scores are equal.
- */
-const POSITION_PREFERENCE = [3, 1, 3, 1, 5, 1, 3, 1, 3] as const;
-
-/**
  * Returns the optimal board index for the AI to play (Hard mode).
- * When multiple moves share the same Minimax score, the positional
- * preference (center > corners > edges) breaks ties — this guarantees
- * the AI opens with center on an empty board, matching optimal play.
+ * If multiple moves share the same Minimax score, it breaks ties using the
+ * trapScore (maximizing opponent mistakes). If still tied, it randomizes the choice.
  *
  * @param board Current board state (AI must have at least one empty cell)
  * @returns     Index (0–8) of the best move
@@ -79,22 +126,29 @@ export function getBestMove(board: BoardState): number {
   if (empty.length === 0) throw new Error('No moves available');
 
   let bestScore = -Infinity;
-  let bestPreference = -1;
-  let bestMove = empty[0];
+  let bestTrap = -Infinity;
+  let bestMoves: number[] = [];
 
   for (const idx of empty) {
     const next = applyMove(board, idx, AI);
-    const score = minimax(next, 0, false, -Infinity, Infinity);
-    const preference = POSITION_PREFERENCE[idx];
-    // Prefer higher score; break ties by positional preference
-    if (score > bestScore || (score === bestScore && preference > bestPreference)) {
-      bestScore = score;
-      bestPreference = preference;
-      bestMove = idx;
+    const result = minimaxFull(next, 0, false);
+    
+    if (result.score > bestScore) {
+      bestScore = result.score;
+      bestTrap = result.trapScore;
+      bestMoves = [idx];
+    } else if (result.score === bestScore) {
+      if (result.trapScore > bestTrap) {
+        bestTrap = result.trapScore;
+        bestMoves = [idx];
+      } else if (result.trapScore === bestTrap) {
+        bestMoves.push(idx);
+      }
     }
   }
 
-  return bestMove;
+  // Randomize among equally optimal and equal-trap moves
+  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
 /**
