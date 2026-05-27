@@ -1,6 +1,6 @@
-# Cloudflare Pages config for XO Tic-Tac-Toe
-# Used only for local `npm run deploy` via CLI.
-# GitHub integration deploys automatically — no wrangler needed on CI.
-
+# Cloudflare Workers config for XO Tic-Tac-Toe
 name = "xo-unbeatable-ai"
-pages_build_output_dir = "./dist"
+compatibility_date = "2026-05-27"
+
+[assets]
+directory = "./dist"
