@@ -1,0 +1,8 @@
+# Cloudflare Pages — Wrangler config for XO Tic-Tac-Toe
+# https://developers.cloudflare.com/pages/
+
+name = "xo-unbeatable-ai"
+pages_build_output_dir = "./dist"
+
+[env.production]
+name = "xo-unbeatable-ai"
