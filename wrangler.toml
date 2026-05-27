@@ -1,8 +1,6 @@
-# Cloudflare Pages — Wrangler config for XO Tic-Tac-Toe
-# https://developers.cloudflare.com/pages/
+# Cloudflare Pages config for XO Tic-Tac-Toe
+# Used only for local `npm run deploy` via CLI.
+# GitHub integration deploys automatically — no wrangler needed on CI.
 
 name = "xo-unbeatable-ai"
 pages_build_output_dir = "./dist"
-
-[env.production]
-name = "xo-unbeatable-ai"
