@@ -11,12 +11,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "start": "serve dist -s -l tcp://0.0.0.0:$PORT",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name xo-unbeatable-ai",
     "deploy:ci": "npx wrangler pages deploy dist --project-name xo-unbeatable-ai"
   },
   "dependencies": {
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "serve": "^14.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
