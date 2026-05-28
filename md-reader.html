@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MD Reader — Markdown Viewer</title>
+  <meta name="description" content="Beautiful Markdown file reader with dark mode, syntax highlighting, and table of contents." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       CSS Custom Properties
+       ============================================================ */
+    :root {
+      --bg-body: #0a0e1a;
+      --bg-surface: #111827;
+      --bg-card: rgba(17, 24, 39, 0.85);
+      --bg-code: #1a1f35;
+      --bg-inline-code: rgba(99, 102, 241, 0.12);
+      --bg-table-row: rgba(99, 102, 241, 0.04);
+      --bg-table-head: rgba(99, 102, 241, 0.08);
+      --bg-blockquote: rgba(99, 102, 241, 0.06);
+      --bg-dropzone: rgba(99, 102, 241, 0.08);
+      --bg-toc: rgba(17, 24, 39, 0.95);
+      --border-glass: rgba(99, 102, 241, 0.15);
+      --border-subtle: rgba(99, 102, 241, 0.1);
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-heading: #f1f5f9;
+      --accent-indigo: #818cf8;
+      --accent-cyan: #00f5d4;
+      --accent-pink: #f72585;
+      --accent-blue: #3d5afe;
+      --accent-purple: #a78bfa;
+      --accent-yellow: #fbbf24;
+      --accent-green: #34d399;
+      --accent-orange: #fb923c;
+      --scrollbar-track: rgba(99, 102, 241, 0.05);
+      --scrollbar-thumb: rgba(99, 102, 241, 0.2);
+      --shadow-glow: 0 0 60px rgba(61, 90, 254, 0.08);
+    }
+
+    /* ============================================================
+       Reset & Base
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 10%, rgba(61, 90, 254, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 90%, rgba(247, 37, 133, 0.04) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 60% at 50% 50%, rgba(0, 245, 212, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.35); }
+
+    ::selection { background: rgba(99, 102, 241, 0.3); }
+
+    /* ============================================================
+       Layout
+       ============================================================ */
+    #app-container {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       Sidebar — Table of Contents
+       ============================================================ */
+    #toc-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 280px;
+      background: var(--bg-toc);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid var(--border-glass);
+      padding: 1.5rem 0;
+      overflow-y: auto;
+      z-index: 100;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #toc-sidebar.hidden-sidebar {
+      transform: translateX(-100%);
+    }
+
+    .toc-header {
+      padding: 0 1.25rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 0.75rem;
+    }
+
+    .toc-header h2 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    #toc-list {
+      list-style: none;
+      padding: 0 0.5rem;
+    }
+
+    #toc-list li {
+      margin: 1px 0;
+    }
+
+    #toc-list a {
+      display: block;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-radius: 0.5rem;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.5;
+    }
+
+    #toc-list a:hover {
+      background: rgba(99, 102, 241, 0.08);
+      color: var(--text-primary);
+    }
+
+    #toc-list a.active {
+      background: rgba(99, 102, 241, 0.12);
+      color: var(--accent-indigo);
+      font-weight: 500;
+    }
+
+    #toc-list a[data-level="2"] { padding-left: 0.75rem; font-weight: 600; }
+    #toc-list a[data-level="3"] { padding-left: 1.75rem; font-size: 0.78rem; }
+    #toc-list a[data-level="4"] { padding-left: 2.75rem; font-size: 0.75rem; color: var(--text-muted); }
+
+    /* ============================================================
+       Main Content Area
+       ============================================================ */
+    #main-content {
+      flex: 1;
+      margin-left: 280px;
+      padding: 2rem 3rem 4rem;
+      max-width: 900px;
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #main-content.full-width {
+      margin-left: 0;
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #main-content.full-width #md-output {
+      max-width: 860px;
+      width: 100%;
+    }
+
+    /* ============================================================
+       Top Bar
+       ============================================================ */
+    #top-bar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 280px;
+      height: 56px;
+      background: rgba(10, 14, 26, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 90;
+      transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #top-bar.full-width { left: 0; }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+
+    #toggle-sidebar-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-glass);
+      border-radius: 0.5rem;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+      font-size: 1.1rem;
+    }
+    #toggle-sidebar-btn:hover { background: rgba(99, 102, 241, 0.1); color: var(--text-primary); }
+
+    #file-name-display {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .top-btn {
+      padding: 0.4rem 1rem;
+      border: 1px solid var(--border-glass);
+      border-radius: 9999px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .top-btn:hover { background: rgba(99, 102, 241, 0.1); color: var(--text-primary); border-color: var(--accent-indigo); }
+
+    .top-btn-primary {
+      background: linear-gradient(135deg, rgba(61, 90, 254, 0.2), rgba(109, 40, 217, 0.2));
+      border-color: rgba(99, 102, 241, 0.3);
+      color: var(--accent-indigo);
+    }
+    .top-btn-primary:hover {
+      background: linear-gradient(135deg, rgba(61, 90, 254, 0.35), rgba(109, 40, 217, 0.35));
+      box-shadow: 0 0 20px rgba(61, 90, 254, 0.2);
+    }
+
+    /* ============================================================
+       Drop Zone (Welcome)
+       ============================================================ */
+    #drop-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 120px);
+      text-align: center;
+      animation: fade-in 0.5s ease both;
+    }
+
+    .drop-area {
+      width: min(500px, 90vw);
+      padding: 4rem 2rem;
+      border: 2px dashed rgba(99, 102, 241, 0.25);
+      border-radius: 1.5rem;
+      background: var(--bg-dropzone);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .drop-area:hover, .drop-area.drag-over {
+      border-color: var(--accent-indigo);
+      background: rgba(99, 102, 241, 0.12);
+      box-shadow: 0 0 40px rgba(99, 102, 241, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .drop-area.drag-over {
+      animation: pulse-border 1s ease infinite alternate;
+    }
+
+    .drop-icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      display: block;
+      filter: grayscale(0.3);
+    }
+
+    .drop-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-bottom: 0.5rem;
+    }
+
+    .drop-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .drop-subtitle kbd {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid var(--border-glass);
+      border-radius: 0.35rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent-indigo);
+    }
+
+    .app-brand {
+      margin-bottom: 2.5rem;
+    }
+
+    .app-brand h1 {
+      font-size: 2.2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo), var(--accent-pink));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .app-brand p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    /* ============================================================
+       Markdown Output
+       ============================================================ */
+    #md-output {
+      padding-top: 72px;
+      animation: slide-up 0.4s ease both;
+    }
+
+    /* Headings */
+    #md-output h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--text-heading);
+      margin: 2.5rem 0 1rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 2px solid var(--border-glass);
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+
+    #md-output h1:first-child { margin-top: 0; }
+
+    #md-output h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text-heading);
+      margin: 2.2rem 0 0.8rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border-subtle);
+      line-height: 1.35;
+    }
+
+    #md-output h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-indigo);
+      margin: 1.8rem 0 0.6rem;
+    }
+
+    #md-output h4 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent-purple);
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    #md-output h5, #md-output h6 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 1.2rem 0 0.5rem;
+    }
+
+    /* Heading anchors */
+    #md-output h1 .heading-anchor,
+    #md-output h2 .heading-anchor,
+    #md-output h3 .heading-anchor,
+    #md-output h4 .heading-anchor {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-left: 0.4rem;
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-weight: 400;
+    }
+
+    #md-output h1:hover .heading-anchor,
+    #md-output h2:hover .heading-anchor,
+    #md-output h3:hover .heading-anchor,
+    #md-output h4:hover .heading-anchor {
+      opacity: 0.6;
+    }
+
+    /* Paragraphs */
+    #md-output p {
+      margin: 0.75rem 0;
+      line-height: 1.8;
+    }
+
+    /* Links */
+    #md-output a {
+      color: var(--accent-indigo);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(129, 140, 248, 0.3);
+      transition: all 0.15s;
+    }
+    #md-output a:hover {
+      color: var(--accent-cyan);
+      border-bottom-color: var(--accent-cyan);
+    }
+
+    /* Bold & Italic */
+    #md-output strong { color: var(--text-heading); font-weight: 700; }
+    #md-output em { color: var(--accent-purple); font-style: italic; }
+
+    /* Lists */
+    #md-output ul, #md-output ol {
+      margin: 0.75rem 0;
+      padding-left: 1.75rem;
+    }
+
+    #md-output li {
+      margin: 0.3rem 0;
+      line-height: 1.7;
+    }
+
+    #md-output li::marker {
+      color: var(--accent-indigo);
+    }
+
+    /* Inline Code */
+    #md-output code:not(pre code) {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      padding: 0.15rem 0.45rem;
+      background: var(--bg-inline-code);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      border-radius: 0.35rem;
+      color: var(--accent-indigo);
+      font-weight: 500;
+    }
+
+    /* Code Blocks */
+    #md-output pre {
+      margin: 1.25rem 0;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-code);
+      position: relative;
+    }
+
+    #md-output pre code {
+      display: block;
+      padding: 1.25rem 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.65;
+      overflow-x: auto;
+      color: #c9d1d9;
+      tab-size: 2;
+    }
+
+    .code-lang-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      padding: 0.2rem 0.75rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      background: rgba(99, 102, 241, 0.08);
+      border-bottom-left-radius: 0.5rem;
+      border-left: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.3rem 0.6rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid var(--border-glass);
+      border-radius: 0.4rem;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-family: inherit;
+      cursor: pointer;
+      opacity: 0;
+      transition: all 0.15s;
+    }
+    #md-output pre:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { background: rgba(99, 102, 241, 0.3); color: var(--text-primary); }
+    .copy-btn.copied { color: var(--accent-green); border-color: var(--accent-green); }
+
+    /* Tables */
+    #md-output table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.88rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+
+    #md-output thead { background: var(--bg-table-head); }
+
+    #md-output th {
+      padding: 0.65rem 1rem;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent-indigo);
+      border-bottom: 1px solid var(--border-glass);
+    }
+
+    #md-output td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.06);
+      vertical-align: top;
+    }
+
+    #md-output tbody tr:nth-child(even) { background: var(--bg-table-row); }
+    #md-output tbody tr:hover { background: rgba(99, 102, 241, 0.06); }
+
+    /* Blockquotes */
+    #md-output blockquote {
+      margin: 1.25rem 0;
+      padding: 0.75rem 1.25rem;
+      border-left: 3px solid var(--accent-indigo);
+      background: var(--bg-blockquote);
+      border-radius: 0 0.5rem 0.5rem 0;
+      color: var(--text-secondary);
+    }
+
+    #md-output blockquote blockquote {
+      margin: 0.5rem 0 0;
+    }
+
+    /* GitHub Alerts */
+    #md-output .alert {
+      margin: 1.25rem 0;
+      padding: 0.85rem 1.25rem;
+      border-radius: 0.5rem;
+      border-left: 4px solid;
+    }
+    #md-output .alert-note { background: rgba(56, 132, 255, 0.06); border-color: #3884ff; }
+    #md-output .alert-tip { background: rgba(52, 211, 153, 0.06); border-color: var(--accent-green); }
+    #md-output .alert-important { background: rgba(167, 139, 250, 0.06); border-color: var(--accent-purple); }
+    #md-output .alert-warning { background: rgba(251, 191, 36, 0.06); border-color: var(--accent-yellow); }
+    #md-output .alert-caution { background: rgba(247, 37, 133, 0.06); border-color: var(--accent-pink); }
+
+    .alert-title {
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .alert-note .alert-title { color: #3884ff; }
+    .alert-tip .alert-title { color: var(--accent-green); }
+    .alert-important .alert-title { color: var(--accent-purple); }
+    .alert-warning .alert-title { color: var(--accent-yellow); }
+    .alert-caution .alert-title { color: var(--accent-pink); }
+
+    /* Horizontal Rule */
+    #md-output hr {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-glass), transparent);
+      margin: 2.5rem 0;
+    }
+
+    /* Images */
+    #md-output img {
+      max-width: 100%;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border-subtle);
+      margin: 1rem 0;
+    }
+
+    /* Checkboxes */
+    #md-output input[type="checkbox"] {
+      margin-right: 0.5rem;
+      accent-color: var(--accent-indigo);
+      transform: scale(1.15);
+    }
+
+    /* ============================================================
+       Animations
+       ============================================================ */
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse-border {
+      0% { border-color: rgba(99, 102, 241, 0.25); }
+      100% { border-color: var(--accent-indigo); }
+    }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 900px) {
+      #toc-sidebar { transform: translateX(-100%); }
+      #toc-sidebar.show-mobile { transform: translateX(0); box-shadow: 4px 0 30px rgba(0,0,0,0.5); }
+      #main-content { margin-left: 0 !important; padding: 1.5rem 1.25rem 3rem; }
+      #top-bar { left: 0 !important; }
+      #md-output h1 { font-size: 1.6rem; }
+      #md-output h2 { font-size: 1.3rem; }
+    }
+
+    @media (max-width: 600px) {
+      #main-content { padding: 1rem 0.75rem 2rem; }
+      #md-output pre code { font-size: 0.75rem; padding: 1rem; }
+      #md-output table { font-size: 0.78rem; }
+      #md-output th, #md-output td { padding: 0.4rem 0.6rem; }
+    }
+
+    /* ============================================================
+       Print
+       ============================================================ */
+    @media print {
+      #toc-sidebar, #top-bar, .copy-btn { display: none !important; }
+      #main-content { margin-left: 0 !important; padding: 0 !important; }
+      body { background: #fff; color: #000; }
+      #md-output h1, #md-output h2, #md-output h3 { color: #000; }
+      #md-output pre { border: 1px solid #ccc; }
+      #md-output code:not(pre code) { background: #f3f4f6; border-color: #d1d5db; color: #4338ca; }
+    }
+
+    /* ============================================================
+       Syntax Highlighting (GitHub Dark)
+       ============================================================ */
+    .hljs-keyword, .hljs-selector-tag { color: #ff7b72; }
+    .hljs-string, .hljs-addition { color: #a5d6ff; }
+    .hljs-number, .hljs-literal { color: #79c0ff; }
+    .hljs-comment, .hljs-deletion { color: #8b949e; font-style: italic; }
+    .hljs-function, .hljs-title { color: #d2a8ff; }
+    .hljs-type, .hljs-built_in { color: #ffa657; }
+    .hljs-attr, .hljs-variable { color: #79c0ff; }
+    .hljs-meta { color: #ffa657; }
+    .hljs-tag { color: #7ee787; }
+    .hljs-attribute { color: #79c0ff; }
+    .hljs-symbol { color: #ffa657; }
+
+    /* diff */
+    .diff-add { color: #3fb950; background: rgba(63, 185, 80, 0.1); display: block; }
+    .diff-del { color: #f85149; background: rgba(248, 81, 73, 0.1); display: block; }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+
+    <!-- Sidebar TOC -->
+    <aside id="toc-sidebar" class="hidden-sidebar">
+      <div class="toc-header">
+        <h2>📑 Table of Contents</h2>
+      </div>
+      <ul id="toc-list"></ul>
+    </aside>
+
+    <!-- Top Bar -->
+    <header id="top-bar" class="full-width">
+      <div class="top-bar-left">
+        <button id="toggle-sidebar-btn" title="Toggle sidebar (Ctrl+B)" aria-label="Toggle sidebar">☰</button>
+        <span id="file-name-display">No file loaded</span>
+      </div>
+      <div class="top-bar-right">
+        <button class="top-btn" id="print-btn" title="Print document">🖨️ Print</button>
+        <label class="top-btn top-btn-primary" id="open-file-label" for="file-input" style="cursor:pointer;">📂 Open .md</label>
+        <input type="file" id="file-input" accept=".md,.markdown,.txt" style="display:none;" />
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-content" class="full-width">
+
+      <!-- Welcome / Drop Zone -->
+      <div id="drop-zone">
+        <div class="app-brand">
+          <h1>MD Reader</h1>
+          <p>Markdown Viewer</p>
+        </div>
+        <div class="drop-area" id="drop-area">
+          <span class="drop-icon">📄</span>
+          <div class="drop-title">เปิดไฟล์ Markdown</div>
+          <div class="drop-subtitle">
+            ลากไฟล์ <code>.md</code> มาวางตรงนี้<br/>
+            หรือ คลิกเพื่อเลือกไฟล์ &middot; กด <kbd>Ctrl+O</kbd>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rendered Markdown -->
+      <article id="md-output" style="display:none;"></article>
+
+    </main>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // Markdown Parser (Pure JS — no dependencies)
+    // ═══════════════════════════════════════════════════════════════
+
+    const MD = (() => {
+      function escapeHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      function slugify(text) {
+        return text.toLowerCase()
+          .replace(/[^\w\s\u0E00-\u0E7F-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+      }
+
+      function parseInline(text) {
+        // Images
+        text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy" />');
+        // Links
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        // Bold+Italic
+        text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        // Bold
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        // Italic
+        text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+        // Strikethrough
+        text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+        // Inline code
+        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // kbd
+        text = text.replace(/<kbd>([^<]+)<\/kbd>/gi, '<kbd>$1</kbd>');
+        // Line break
+        text = text.replace(/  $/gm, '<br/>');
+        return text;
+      }
+
+      function parseCodeBlock(code, lang) {
+        let escaped = escapeHtml(code);
+
+        // Diff highlighting
+        if (lang === 'diff') {
+          escaped = escaped.split('\n').map(line => {
+            if (line.startsWith('+')) return `<span class="diff-add">${line}</span>`;
+            if (line.startsWith('-')) return `<span class="diff-del">${line}</span>`;
+            return line;
+          }).join('\n');
+        }
+
+        // Basic syntax highlighting for common languages
+        if (['typescript','ts','javascript','js','jsx','tsx'].includes(lang)) {
+          escaped = highlightJS(escaped);
+        } else if (['css','scss'].includes(lang)) {
+          escaped = highlightCSS(escaped);
+        } else if (['html','xml','svg'].includes(lang)) {
+          escaped = highlightHTML(escaped);
+        } else if (['bash','sh','shell','zsh'].includes(lang)) {
+          escaped = highlightBash(escaped);
+        } else if (['python','py'].includes(lang)) {
+          escaped = highlightPython(escaped);
+        } else if (lang === 'json') {
+          escaped = highlightJSON(escaped);
+        }
+
+        const langBadge = lang ? `<span class="code-lang-badge">${escapeHtml(lang)}</span>` : '';
+        const copyBtn = `<button class="copy-btn" onclick="copyCode(this)">Copy</button>`;
+        return `<pre>${langBadge}${copyBtn}<code>${escaped}</code></pre>`;
+      }
+
+      // Simple regex-based highlighting (imperfect but useful)
+      function highlightJS(code) {
+        // Comments (// and /* */)
+        code = code.replace(/(\/\/.*)/g, '<span class="hljs-comment">$1</span>');
+        code = code.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hljs-comment">$1</span>');
+        // Strings
+        code = code.replace(/(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;|'[^']*?')/g, '<span class="hljs-string">$1</span>');
+        // Template literals with backticks
+        code = code.replace(/(`[^`]*?`)/g, '<span class="hljs-string">$1</span>');
+        // Keywords
+        const kw = /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|this|class|extends|import|export|from|default|type|interface|enum|as|typeof|instanceof|in|of|async|await|try|catch|finally|throw|true|false|null|undefined|void|never|readonly)\b/g;
+        code = code.replace(kw, '<span class="hljs-keyword">$1</span>');
+        // Numbers
+        code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hljs-number">$1</span>');
+        // Types
+        code = code.replace(/\b(string|number|boolean|any|object|Array|Map|Set|Promise|Record|Partial)\b/g, '<span class="hljs-type">$1</span>');
+        return code;
+      }
+
+      function highlightCSS(code) {
+        code = code.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hljs-comment">$1</span>');
+        code = code.replace(/(#[\da-fA-F]{3,8})\b/g, '<span class="hljs-number">$1</span>');
+        code = code.replace(/(\d+\.?\d*(px|rem|em|%|vh|vw|ms|s|deg))/g, '<span class="hljs-number">$1</span>');
+        code = code.replace(/(--[\w-]+)/g, '<span class="hljs-variable">$1</span>');
+        return code;
+      }
+
+      function highlightHTML(code) {
+        code = code.replace(/(&lt;\/?[\w-]+)/g, '<span class="hljs-tag">$1</span>');
+        code = code.replace(/(\w+)=/g, '<span class="hljs-attribute">$1</span>=');
+        code = code.replace(/(&quot;[^&]*?&quot;)/g, '<span class="hljs-string">$1</span>');
+        return code;
+      }
+
+      function highlightBash(code) {
+        code = code.replace(/(#.*)/g, '<span class="hljs-comment">$1</span>');
+        code = code.replace(/(&quot;[^&]*?&quot;|'[^']*?')/g, '<span class="hljs-string">$1</span>');
+        const cmds = /\b(npm|npx|node|git|cd|ls|mkdir|rm|cp|mv|echo|export|source|curl|wget|sudo|apt|brew|yarn|pnpm|vitest|vite|tsc|wrangler|serve)\b/g;
+        code = code.replace(cmds, '<span class="hljs-keyword">$1</span>');
+        return code;
+      }
+
+      function highlightPython(code) {
+        code = code.replace(/(#.*)/g, '<span class="hljs-comment">$1</span>');
+        code = code.replace(/(&quot;[^&]*?&quot;|'[^']*?')/g, '<span class="hljs-string">$1</span>');
+        const kw = /\b(def|class|return|if|elif|else|for|while|import|from|as|try|except|finally|with|lambda|yield|pass|break|continue|raise|True|False|None|and|or|not|in|is|self)\b/g;
+        code = code.replace(kw, '<span class="hljs-keyword">$1</span>');
+        code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hljs-number">$1</span>');
+        return code;
+      }
+
+      function highlightJSON(code) {
+        code = code.replace(/(&quot;[^&]*?&quot;)\s*:/g, '<span class="hljs-attr">$1</span>:');
+        code = code.replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="hljs-string">$1</span>');
+        code = code.replace(/\b(true|false|null)\b/g, '<span class="hljs-literal">$1</span>');
+        code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hljs-number">$1</span>');
+        return code;
+      }
+
+      function parse(md) {
+        const lines = md.split('\n');
+        let html = '';
+        let i = 0;
+        const headings = [];
+
+        while (i < lines.length) {
+          const line = lines[i];
+
+          // ── Fenced code blocks ──
+          const codeMatch = line.match(/^(`{3,})([\w+-]*)/);
+          if (codeMatch) {
+            const fence = codeMatch[1];
+            const lang = codeMatch[2] || '';
+            let code = '';
+            i++;
+            while (i < lines.length && !lines[i].startsWith(fence)) {
+              code += (code ? '\n' : '') + lines[i];
+              i++;
+            }
+            i++; // skip closing fence
+            html += parseCodeBlock(code, lang);
+            continue;
+          }
+
+          // ── Horizontal rule ──
+          if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+            html += '<hr/>';
+            i++;
+            continue;
+          }
+
+          // ── Headings ──
+          const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+          if (headingMatch) {
+            const level = headingMatch[1].length;
+            const text = headingMatch[2].replace(/\s+#*$/, '');
+            const slug = slugify(text.replace(/<[^>]+>/g, '').replace(/[`*_~\[\]()]/g, ''));
+            headings.push({ level, text: text.replace(/<[^>]+>/g, '').replace(/[`*_~]/g, ''), slug });
+            html += `<h${level} id="${slug}">${parseInline(text)} <a class="heading-anchor" href="#${slug}">#</a></h${level}>`;
+            i++;
+            continue;
+          }
+
+          // ── GitHub Alerts in blockquotes ──
+          const alertMatch = line.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+          if (alertMatch) {
+            const alertType = alertMatch[1].toLowerCase();
+            const icons = { note: 'ℹ️', tip: '💡', important: '❗', warning: '⚠️', caution: '🔴' };
+            let content = '';
+            i++;
+            while (i < lines.length && lines[i].startsWith('>')) {
+              content += (content ? '\n' : '') + lines[i].replace(/^>\s?/, '');
+              i++;
+            }
+            html += `<div class="alert alert-${alertType}"><div class="alert-title">${icons[alertType]} ${alertType}</div><div>${parseInline(content)}</div></div>`;
+            continue;
+          }
+
+          // ── Blockquotes ──
+          if (line.startsWith('>')) {
+            let bqContent = '';
+            while (i < lines.length && lines[i].startsWith('>')) {
+              bqContent += (bqContent ? '\n' : '') + lines[i].replace(/^>\s?/, '');
+              i++;
+            }
+            html += `<blockquote>${parse(bqContent)}</blockquote>`;
+            continue;
+          }
+
+          // ── Tables ──
+          if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*[-:]+/.test(lines[i + 1])) {
+            const headerCells = line.split('|').map(c => c.trim()).filter(Boolean);
+            const alignLine = lines[i + 1];
+            const aligns = alignLine.split('|').map(c => c.trim()).filter(Boolean).map(c => {
+              if (c.startsWith(':') && c.endsWith(':')) return 'center';
+              if (c.endsWith(':')) return 'right';
+              return 'left';
+            });
+            let tableHtml = '<table><thead><tr>';
+            headerCells.forEach((cell, ci) => {
+              tableHtml += `<th style="text-align:${aligns[ci] || 'left'}">${parseInline(cell)}</th>`;
+            });
+            tableHtml += '</tr></thead><tbody>';
+            i += 2;
+            while (i < lines.length && lines[i].includes('|')) {
+              const cells = lines[i].split('|').map(c => c.trim()).filter(Boolean);
+              tableHtml += '<tr>';
+              cells.forEach((cell, ci) => {
+                tableHtml += `<td style="text-align:${aligns[ci] || 'left'}">${parseInline(cell)}</td>`;
+              });
+              tableHtml += '</tr>';
+              i++;
+            }
+            tableHtml += '</tbody></table>';
+            html += tableHtml;
+            continue;
+          }
+
+          // ── Unordered lists ──
+          if (/^\s*[-*+]\s/.test(line)) {
+            let listHtml = '<ul>';
+            while (i < lines.length && /^\s*[-*+]\s/.test(lines[i])) {
+              const itemText = lines[i].replace(/^\s*[-*+]\s/, '');
+              // Checkbox
+              let checkbox = '';
+              let text = itemText;
+              if (text.startsWith('[ ] ') || text.startsWith('[x] ') || text.startsWith('[X] ') || text.startsWith('[/] ')) {
+                const checked = text[1] !== ' ';
+                checkbox = `<input type="checkbox" disabled ${checked ? 'checked' : ''} />`;
+                text = text.slice(4);
+              }
+              listHtml += `<li>${checkbox}${parseInline(text)}</li>`;
+              i++;
+            }
+            listHtml += '</ul>';
+            html += listHtml;
+            continue;
+          }
+
+          // ── Ordered lists ──
+          if (/^\s*\d+\.\s/.test(line)) {
+            let listHtml = '<ol>';
+            while (i < lines.length && /^\s*\d+\.\s/.test(lines[i])) {
+              const text = lines[i].replace(/^\s*\d+\.\s/, '');
+              listHtml += `<li>${parseInline(text)}</li>`;
+              i++;
+            }
+            listHtml += '</ol>';
+            html += listHtml;
+            continue;
+          }
+
+          // ── Empty line ──
+          if (line.trim() === '') {
+            i++;
+            continue;
+          }
+
+          // ── Paragraph ──
+          let para = line;
+          i++;
+          while (i < lines.length && lines[i].trim() !== '' && !lines[i].match(/^(#{1,6}\s|```|---|[*_]{3,}|>\s|\||\s*[-*+]\s|\s*\d+\.\s)/)) {
+            para += '\n' + lines[i];
+            i++;
+          }
+          html += `<p>${parseInline(para)}</p>`;
+        }
+
+        return html;
+      }
+
+      function getHeadings(md) {
+        const headings = [];
+        const lines = md.split('\n');
+        let inCode = false;
+        for (const line of lines) {
+          if (line.startsWith('```')) { inCode = !inCode; continue; }
+          if (inCode) continue;
+          const m = line.match(/^(#{1,6})\s+(.+)$/);
+          if (m) {
+            const text = m[2].replace(/\s+#*$/, '').replace(/<[^>]+>/g, '').replace(/[`*_~\[\]()]/g, '');
+            headings.push({ level: m[1].length, text, slug: slugify(text) });
+          }
+        }
+        return headings;
+      }
+
+      return { parse, getHeadings };
+    })();
+
+    // ═══════════════════════════════════════════════════════════════
+    // App Logic
+    // ═══════════════════════════════════════════════════════════════
+
+    const $ = (sel) => document.querySelector(sel);
+    const tocSidebar = $('#toc-sidebar');
+    const tocList = $('#toc-list');
+    const mainContent = $('#main-content');
+    const topBar = $('#top-bar');
+    const dropZone = $('#drop-zone');
+    const mdOutput = $('#md-output');
+    const fileInput = $('#file-input');
+    const fileNameDisplay = $('#file-name-display');
+    const dropArea = $('#drop-area');
+    const toggleSidebarBtn = $('#toggle-sidebar-btn');
+    const printBtn = $('#print-btn');
+
+    let sidebarOpen = false;
+
+    function toggleSidebar() {
+      sidebarOpen = !sidebarOpen;
+      if (sidebarOpen) {
+        tocSidebar.classList.remove('hidden-sidebar');
+        tocSidebar.classList.add('show-mobile');
+        mainContent.classList.remove('full-width');
+        topBar.classList.remove('full-width');
+      } else {
+        tocSidebar.classList.add('hidden-sidebar');
+        tocSidebar.classList.remove('show-mobile');
+        mainContent.classList.add('full-width');
+        topBar.classList.add('full-width');
+      }
+    }
+
+    function renderMarkdown(text, filename) {
+      // Parse and render
+      const html = MD.parse(text);
+      mdOutput.innerHTML = html;
+      mdOutput.style.display = 'block';
+      dropZone.style.display = 'none';
+      fileNameDisplay.textContent = filename || 'Untitled';
+      document.title = `${filename || 'Untitled'} — MD Reader`;
+
+      // Build TOC
+      const headings = MD.getHeadings(text);
+      tocList.innerHTML = '';
+      if (headings.length > 0) {
+        headings.forEach(h => {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = `#${h.slug}`;
+          a.textContent = h.text;
+          a.setAttribute('data-level', h.level);
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const target = document.getElementById(h.slug);
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // On mobile, close sidebar after click
+              if (window.innerWidth <= 900 && sidebarOpen) toggleSidebar();
+            }
+          });
+          li.appendChild(a);
+          tocList.appendChild(li);
+        });
+
+        // Auto-open sidebar on desktop if headings exist
+        if (window.innerWidth > 900 && !sidebarOpen) {
+          toggleSidebar();
+        }
+      }
+
+      // Scroll intersection for TOC active state
+      setupScrollSpy();
+
+      // Scroll to top
+      window.scrollTo({ top: 0 });
+    }
+
+    function setupScrollSpy() {
+      const tocLinks = tocList.querySelectorAll('a');
+      if (tocLinks.length === 0) return;
+
+      const headingEls = Array.from(tocLinks).map(a => {
+        const id = a.getAttribute('href').slice(1);
+        return document.getElementById(id);
+      }).filter(Boolean);
+
+      let ticking = false;
+
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          let activeIdx = 0;
+          const scrollY = window.scrollY + 100;
+          headingEls.forEach((el, idx) => {
+            if (el.offsetTop <= scrollY) activeIdx = idx;
+          });
+          tocLinks.forEach((a, idx) => {
+            a.classList.toggle('active', idx === activeIdx);
+          });
+          ticking = false;
+        });
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+
+    function loadFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        renderMarkdown(e.target.result, file.name);
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Event Listeners
+    // ═══════════════════════════════════════════════════════════════
+
+    // File input
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) loadFile(e.target.files[0]);
+    });
+
+    // Drop area click
+    dropArea.addEventListener('click', () => fileInput.click());
+
+    // Drag & Drop on entire page
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropArea.classList.add('drag-over');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget === null || !document.contains(e.relatedTarget)) {
+        dropArea.classList.remove('drag-over');
+      }
+    });
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropArea.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) loadFile(files[0]);
+    });
+
+    // Toggle sidebar
+    toggleSidebarBtn.addEventListener('click', toggleSidebar);
+
+    // Print
+    printBtn.addEventListener('click', () => window.print());
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+O — Open file
+      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+        e.preventDefault();
+        fileInput.click();
+      }
+      // Ctrl+B — Toggle sidebar
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+      // Ctrl+P — Print
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        window.print();
+      }
+    });
+
+    // Copy code button
+    window.copyCode = function(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // Auto-load DOCS.md hint
+    // ═══════════════════════════════════════════════════════════════
+    // If opened with a hash, try to scroll to it
+    if (window.location.hash) {
+      setTimeout(() => {
+        const target = document.querySelector(window.location.hash);
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  </script>
+</body>
+</html>
